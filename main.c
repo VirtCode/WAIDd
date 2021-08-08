@@ -6,19 +6,21 @@
 #include <unistd.h>
 #include <ctype.h>
 
+#define WAID_VERSION "0.1"
+
+#define CONFIG_FILE "/.config/waid/daemon.cfg"
+
 #define KEY_STORAGE "storage"
 #define KEY_INTERVAL "interval"
 
-#define CONFIG_FILE strcat(getenv("HOME"), "/.config/waid/daemon.cfg"))
-#define DEFAULT_STORAGE strcat(getenv("HOME"), "/.waidfile"))
+#define DEFAULT_STORAGE "/.waidfile"
 #define DEFAULT_INTERVAL 60
 
 Display* display;
 
 char* storage;
 int interval;
-
-
+char running;
 
 int fetchProperty(Display* display, unsigned long* window, char* name, unsigned char** property){
     Atom type;
@@ -35,6 +37,7 @@ int fetchProperty(Display* display, unsigned long* window, char* name, unsigned 
 int fetchWindow(unsigned char** nameHolder){
     // Open connection to X Server
     if (display == NULL){
+        printf("Reopening connection to X Server\n");
         display = XOpenDisplay(NULL);
         if (display == NULL) return 1;
     }
@@ -59,10 +62,12 @@ void processConfigEntry(char* key, char* value){
 
         storage = malloc(strlen(value) + 1); // Allocate enough memory
         strncpy(storage, value, strlen(value));
+        printf("Picked up custom storage from config\n");
 
     }else if (!strcmp(key, KEY_INTERVAL)){
 
         interval = atoi(value);
+        printf("Picked up custom interval from config\n");
 
     }else printf("Unrecognized config option: \"%s\"\n", key);
 }
@@ -106,6 +111,7 @@ void processConfig(char* line, int equalIndex, int length){
 }
 
 int readConfig(char* path){
+    printf("Reading config file from \"%s\"\n", path);
     FILE* config = fopen(path, "r");
     if (!config) return 1;
 
@@ -133,9 +139,53 @@ int readConfig(char* path){
     return 0;
 }
 
+void takeSnapshot(long time){
+
+}
+
+void scheduleSnapshots(){
+    running = 1;
+
+    long lastTime = time(NULL);
+    long currentTime = time(NULL);
+
+    printf("Entering Schedule\n\n\n");
+    while (running){
+        sleep(1);
+
+        currentTime = time(NULL);
+        if (currentTime - lastTime >= interval) {
+            takeSnapshot(currentTime);
+            lastTime = currentTime;
+        }
+    }
+}
+
 int main(){
-    if(readConfig(CONFIG_FILE) printf("Failed to read config");
-    printf("%d", interval);
+    printf("Starting the WAID daemon version %s \nPlease be aware that this daemon does only track your program usage and offers no way to display this data in a readable way.\nIn order to do that, other tools may need to be installed.\nAlso, make sure that no two instances of this daemon run simultaneously.\n\n", WAID_VERSION);
+
+    char* home = getenv("HOME");
+
+    char* config = malloc(strlen(home) + strlen(CONFIG_FILE) + 1); config[0] = '\0';
+    strcat(config, home); strcat(config, CONFIG_FILE);
+    if(readConfig(config)) printf("Failed to read config\n");
+    free(config);
+
+    if(storage == NULL) {
+        storage = malloc(strlen(home) + strlen(DEFAULT_STORAGE) + 1); storage[0] = '\0';
+        strcat(storage, home); strcat(storage, DEFAULT_STORAGE);
+    }
+
+    printf("\nGoing to store program usage in: \"%s\"\n", storage);
+    printf("A usage snapshot will be taken every %d seconds\n", interval);
+
+    printf("\nConnecting to X Server\n");
+    display = XOpenDisplay(NULL);
+    if (display == NULL) printf("Failed to connect to X Server\n");
+
+    printf("\nFinished initializing\n");
+    scheduleSnapshots();
+
     return 0;
 }
 
