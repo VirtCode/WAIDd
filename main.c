@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#define WAID_VERSION "0.1"
+#define WAID_VERSION "1.0"
 
 #define CONFIG_FILE "/.config/waid/daemon.cfg"
 
@@ -16,18 +16,30 @@
 #define DEFAULT_STORAGE "/.waidfile"
 #define DEFAULT_INTERVAL 60
 
+#define FILE_IDENTIFIER_VERSION 0x01
+#define FILE_IDENTIFIER_DEFINE 0x02
+#define FILE_IDENTIFIER_RECORD 0x03
+
+#define FILE_VERSION_CHAOTIC 0x01
+
 Display* display;
 
 char* storage;
 int interval;
 char running;
 
+char* programList;
+int programListSize;
+unsigned short currentMaxId;
+
+FILE* waidfile;
+
 int fetchProperty(Display* display, unsigned long* window, char* name, unsigned char** property){
     Atom type;
     int format;
     unsigned long items, bytesAfter;
 
-    int status = XGetWindowProperty(display, *window, XInternAtom(display, name, True), 0, 1000, False, AnyPropertyType,
+    int status = XGetWindowProperty(display, *window, XInternAtom(display, name, True), 0, 255, False, AnyPropertyType,
                                     &type, &format, &items, &bytesAfter, property);
     if (status != Success) status = 1;
     else status = 0;
@@ -139,15 +151,164 @@ int readConfig(char* path){
     return 0;
 }
 
-void takeSnapshot(long time){
-
+void writeVersion(FILE* file, char version){
+    char identifier = FILE_IDENTIFIER_VERSION;
+    fwrite(&identifier, sizeof(char), 1, file);
+    fwrite(&version, sizeof(char), 1, file);
 }
 
-void scheduleSnapshots(){
+void writeDefine(FILE* file, unsigned short id, char* name){
+    char identifier = FILE_IDENTIFIER_DEFINE;
+    fwrite(&identifier, sizeof(char), 1, file);
+    fwrite(&id, sizeof(short), 1, file);
+    fwrite(name, sizeof(char), strlen(name) + 1, file);
+}
+
+void writeRecord(FILE* file, long time, unsigned short id){
+    char identifier = FILE_IDENTIFIER_RECORD;
+    fwrite(&identifier, sizeof(char), 1, file);
+    fwrite(&time, sizeof(long), 1, file);
+    fwrite(&id, sizeof(short), 1, file);
+}
+
+void readVersion(FILE* file, char* version){
+    fread(version, sizeof(char), 1, file);
+}
+
+void readDefine(FILE* file, unsigned short* id, char* buffer, int bufferSize){
+    fread(id, sizeof(short), 1, file);
+
+    for (int i = 0; i < bufferSize; ++i) {
+        fread(buffer + i, sizeof(char), 1, file);
+        if (buffer[i] == '\0') break;
+    }
+}
+
+void skipRecord(FILE* file){
+    fseek(file, sizeof(long) + sizeof(short), SEEK_CUR);
+}
+
+void setProgramId(unsigned short id, char* string){
+    if (id > currentMaxId) currentMaxId = id;
+
+    int addIndex = programListSize;
+    programListSize += sizeof(short) + strlen(string) + 1;
+
+    if (programList == NULL) programList = malloc(programListSize);
+    else programList = realloc(programList, programListSize);
+
+
+    for (int i = 0; i < sizeof(short); ++i) {
+        (programList + addIndex)[i] = ((char *) &id)[i];
+    }
+    strcpy(programList + addIndex + sizeof(short), string);
+}
+
+short addProgram(char* name){
+    setProgramId(++currentMaxId, name);
+    writeDefine(waidfile, currentMaxId, name);
+
+    return currentMaxId;
+}
+
+unsigned short getProgramId(char* name){
+
+    for (int i = 0; i < programListSize;) {
+
+        if(!strcmp(programList + i + sizeof(short), name)) return *((unsigned short *) (programList + i));
+        i += sizeof(short);
+        i += strlen(programList + i) + 1;
+    }
+
+    return 0;
+}
+
+void initializeStorage(){
+    FILE* file = fopen(storage, "wb");
+    writeVersion(file, FILE_VERSION_CHAOTIC);
+    fclose(file);
+}
+
+int readStorage(){
+    printf("Reading previous snapshots from \"%s\"\n", storage);
+    FILE* file = fopen(storage, "rb");
+    if (file == NULL) {
+        printf("No storage file found, creating one now\n");
+        initializeStorage();
+        return 0;
+    }
+
+    int recordCount = 0;
+    int defineCount = 0;
+
+    char currentIndicator = 0;
+    while (fread(&currentIndicator, sizeof(char), 1, file)){
+
+        switch (currentIndicator) {
+            case FILE_IDENTIFIER_VERSION: ;
+
+                char version = 0;
+                readVersion(file, &version);
+                if (version != FILE_VERSION_CHAOTIC) {
+                    printf("Existing storage file has an unsupported version (%d, expected %d), cannot use the file\n", version, FILE_VERSION_CHAOTIC);
+                    return 1;
+                }
+
+                break;
+            case FILE_IDENTIFIER_DEFINE: ;
+
+                char* buffer = malloc(255);
+                unsigned short id = 0;
+                readDefine(file, &id, buffer, 255);
+
+                setProgramId(id, buffer);
+
+                free(buffer);
+                defineCount++;
+
+                break;
+            case FILE_IDENTIFIER_RECORD:
+
+                skipRecord(file);
+                recordCount++;
+
+                break;
+        }
+    }
+
+    printf("Finished reading the file. It contains %d different Applications and %d total records.\n", defineCount, recordCount);
+
+    return 0;
+}
+
+int openFile(){
+    printf("Opening current waidfile \"%s\" to write in\n", storage);
+    waidfile = fopen(storage, "ab");
+    return waidfile == 0;
+}
+
+void takeRecord(long time){
+    printf("Taking record at %ld\n", time);
+
+    unsigned char* currentName;
+    fetchWindow(&currentName);
+
+    unsigned short id = getProgramId((char*) currentName);
+    if (id == 0) {
+        printf("New Program \"%s\" detected, adding it\n", currentName);
+        id = addProgram((char*) currentName);
+    }
+
+    writeRecord(waidfile, time, id);
+
+    fflush(waidfile);
+}
+
+void scheduleRecords(){
     running = 1;
 
     long lastTime = time(NULL);
-    long currentTime = time(NULL);
+    long currentTime = 0L;
 
     printf("Entering Schedule\n\n\n");
     while (running){
@@ -155,7 +316,7 @@ void scheduleSnapshots(){
 
         currentTime = time(NULL);
         if (currentTime - lastTime >= interval) {
-            takeSnapshot(currentTime);
+            takeRecord(currentTime);
             lastTime = currentTime;
         }
     }
@@ -175,16 +336,26 @@ int main(){
         storage = malloc(strlen(home) + strlen(DEFAULT_STORAGE) + 1); storage[0] = '\0';
         strcat(storage, home); strcat(storage, DEFAULT_STORAGE);
     }
+    if (interval == 0) interval = DEFAULT_INTERVAL;
 
     printf("\nGoing to store program usage in: \"%s\"\n", storage);
     printf("A usage snapshot will be taken every %d seconds\n", interval);
 
     printf("\nConnecting to X Server\n");
     display = XOpenDisplay(NULL);
-    if (display == NULL) printf("Failed to connect to X Server\n");
+    if (display == NULL) printf("Failed to connect to X Server\n\n");
+
+    if(readStorage()) {
+        printf("\nFailed to read the storage file, because it is not supported\nGoing to exit\n");
+        return 1;
+    }
+    if(openFile()){
+        printf("\nFailed to open the storage file for appending\nGoing to exit\n");
+        return 1;
+    }
 
     printf("\nFinished initializing\n");
-    scheduleSnapshots();
+    scheduleRecords();
 
     return 0;
 }
