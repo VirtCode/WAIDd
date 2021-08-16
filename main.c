@@ -63,6 +63,9 @@ int fetchWindow(unsigned char** nameHolder){
     if (fetchProperty(display, &window, "_NET_ACTIVE_WINDOW", &prop) == 1) return 1;
     window = prop[0] + (prop[1] << 8) + (prop[2] << 16) + (prop[3] << 24);
 
+    // Make sure there is a window
+    if (window == 0) return 1;
+
     // Fetch the name of said window
     if (fetchProperty(display, &window, "WM_CLASS", nameHolder) == 1) return 1;
 
@@ -291,12 +294,17 @@ void takeRecord(long time){
     printf("Taking record at %ld\n", time);
 
     unsigned char* currentName;
-    fetchWindow(&currentName);
+    unsigned short id;
+    if (fetchWindow(&currentName)) id = 0; // Zero if now window is selected
+    else {
 
-    unsigned short id = getProgramId((char*) currentName);
-    if (id == 0) {
-        printf("New Program \"%s\" detected, adding it\n", currentName);
-        id = addProgram((char*) currentName);
+        // Get id if a window is selected
+        id = getProgramId((char*) currentName);
+        if (id == 0) {
+            printf("New Program \"%s\" detected, adding it\n", currentName);
+            id = addProgram((char*) currentName);
+        }
+
     }
 
     writeRecord(waidfile, time, id);
