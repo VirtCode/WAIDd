@@ -1,11 +1,10 @@
 build: main.c
 	mkdir -p built
-	gcc main.c -o built/waiddaemon -lX11
+	gcc main.c -o built/waidd -lX11
 
 run: build
-	./built/waiddaemon
+	./built/waidd
 
 install: build
-	-killall waiddaemon
-	# Yes, sudo in a makefile is probably not a good practice
-	sudo -S cp ./built/waiddaemon /bin/waiddaemon
+	-killall waidd
+	cp ./built/waidd ~/.local/bin/waidd
