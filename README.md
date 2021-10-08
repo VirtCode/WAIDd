@@ -1,7 +1,13 @@
 # WAIDd
-> WAIDd is an open source, lightweight daemon that keeps track of what you are doing on your Linux PC. 
+> WAIDd is an open source, lightweight daemon that keeps track of what you are doing on your Linux Desktop. 
 ## About
 
+## Installation
+Dependencies??
+### Using an Init System
+### Configuration
+
+## How it works
 
 ## Fileformat
 WAID saves its recorded data in a custom format. It does not use any common file formats like Json or Xml nor does it use a text file to store the data. WAID uses a raw binary file, to store its data as defined below. 
@@ -13,9 +19,9 @@ Generally, the waidfile format consists of multiple packages, that are chained b
 
 (The first row of the table determines the length of the data object in bytes. The second row states what the data stands for.)
 
-| 1 | 1 ... x | 1 | 1 ... x |
-|:---|:---|:---|:---|
-| packet id | packet body of fist packet | packet id | packet body of second packet |
+| 1 | 1 ... x | 1 | 1 ... x | ... |
+|:---|:---|:---|:---|:---|
+| packet id | packet body of fist packet | packet id | packet body of second packet | ...|
 
 #### Version Packet
 > Packet ID: 0x01
@@ -54,7 +60,7 @@ The length statement packets defines the length of the following record packets.
 | amount of seconds the following programs were used | 
 
 ## Naming
-The acronym "WAID" stands for "<u>W</u>hat <u>a</u>m <u>I</u> <u>d</u>oing?". The "d" suffix in "WAIDd" states that the program is a daemon.
+The acronym "WAID" stands for "**W**hat **a**m **I** **d**oing?". The "d" suffix in "WAID**d**" states that the program is a daemon.
 
 ## License
-This program is free software and is licensed under the MIT license. Take a look at the LICENSE file to read more.
+This program is free software and is licensed under the MIT license. Take a look at the LICENSE file to get more information.

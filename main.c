@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#define WAID_VERSION "1.0"
+#define WAID_VERSION "1.1"
 
 #define CONFIG_FILE "/.config/waid/daemon.cfg"
 
@@ -19,15 +19,17 @@
 #define FILE_IDENTIFIER_VERSION 0x01
 #define FILE_IDENTIFIER_DEFINE 0x02
 #define FILE_IDENTIFIER_RECORD 0x03
+#define FILE_IDENTIFIER_LENGTH 0x04
 
 #define FILE_VERSION_CHAOTIC 0x01
 
 Display* display;
 
 char* storage;
-int interval;
+unsigned int interval;
 char running;
 
+unsigned int fileInterval = 0;
 char* programList;
 int programListSize;
 unsigned short currentMaxId;
@@ -81,7 +83,7 @@ void processConfigEntry(char* key, char* value){
 
     }else if (!strcmp(key, KEY_INTERVAL)){
 
-        interval = atoi(value);
+        interval = strtoul(value, NULL, 0);
         printf("Picked up custom interval from config\n");
 
     }else printf("Unrecognized config option: \"%s\"\n", key);
@@ -174,6 +176,12 @@ void writeRecord(FILE* file, long time, unsigned short id){
     fwrite(&id, sizeof(short), 1, file);
 }
 
+void writeLength(FILE* file, unsigned int length) {
+    char identifier = FILE_IDENTIFIER_LENGTH;
+    fwrite(&identifier, sizeof(char), 1, file);
+    fwrite(&length, sizeof(int), 1, file);
+}
+
 void readVersion(FILE* file, char* version){
     fread(version, sizeof(char), 1, file);
 }
@@ -185,6 +193,10 @@ void readDefine(FILE* file, unsigned short* id, char* buffer, int bufferSize){
         fread(buffer + i, sizeof(char), 1, file);
         if (buffer[i] == '\0') break;
     }
+}
+
+void readLength(FILE* file, unsigned int* length) {
+    fread(length, sizeof(int), 1, file);
 }
 
 void skipRecord(FILE* file){
@@ -276,10 +288,15 @@ int readStorage(){
                 recordCount++;
 
                 break;
+            case FILE_IDENTIFIER_LENGTH:
+
+                readLength(file, &fileInterval);
+
+                break;
         }
     }
 
-    printf("Finished reading the file. It contains %d different Applications and %d total records.\n", defineCount, recordCount);
+    printf("Finished reading the file. It contains %d different Applications and %d total records, with an interval set to %d seconds.\n", defineCount, recordCount, fileInterval);
 
     return 0;
 }
@@ -293,9 +310,16 @@ int openFile(){
 void takeRecord(long time){
     printf("Taking record at %ld\n", time);
 
+    if (fileInterval != interval) {
+        printf("Changing file interval from %d to %d seconds\n", fileInterval, interval);
+        fileInterval = interval;
+
+        writeLength(waidfile, interval);
+    }
+
     unsigned char* currentName;
     unsigned short id;
-    if (fetchWindow(&currentName)) id = 0; // Zero if now window is selected
+    if (fetchWindow(&currentName)) id = 0; // Zero if no window is selected
     else {
 
         // Get id if a window is selected
