@@ -1,5 +1,5 @@
 # WAIDd
-> WAIDd is an open source, lightweight daemon that keeps track of what you are doing on your Linux desktop. 
+> WAIDd is a lightweight daemon that keeps track of what you are doing on your Linux desktop. 
 ## About
 This daemon does collect data about what you are doing on your X-Server. It does so by determining your currently focused window every so often. The data of *when* you have focused *which* window can then be used to state which applications you use how much and how often. 
 
@@ -21,7 +21,7 @@ Because of this design choice has this daemon been written in C or does this pro
 For this program to fetch data from your X-Server, it uses the header ```X11/Xlib.h```. On most modern Linux systems, this header is not installed by default. So install the package for your distribution that adds this header.
 
 On Debian based systems, the package ```libx11-dev``` adds the header. <br>
-On Arch based systems, the package ```libx11``` presumably adds the header.
+On Arch based systems, the package is normally installed directly with Xorg or if not, ```libx11``` presumably adds the header.
 
 ### 2. Obtaining the Binary
 Next you should get your hands on a compiled version of this program. There are two ways to achieve this, compiling it yourself, or downloading a precompiled version (only available for ```amd64``` systems). 
