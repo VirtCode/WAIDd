@@ -63,6 +63,9 @@ int fetchWindow(unsigned char** nameHolder){
     // Fetch active window
     unsigned char* prop;
     if (fetchProperty(display, &window, "_NET_ACTIVE_WINDOW", &prop) == 1) return 1;
+
+    // Make sure a prop was returned
+    if (!prop) return 1;
     window = prop[0] + (prop[1] << 8) + (prop[2] << 16) + (prop[3] << 24);
 
     // Make sure there is a window
